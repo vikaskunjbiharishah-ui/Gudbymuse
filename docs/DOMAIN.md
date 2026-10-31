@@ -58,11 +58,20 @@ not a silent edit.
   categories, loans reducing wealth, an empty family, and rejection
   of an unknown category. Values are hand-computed in the test.
 
+## App wiring
+
+- The app module now depends on `:core:domain`.
+  `DomainWealthSummaryRepository` (in the app module) runs
+  `FamilyWealthCalculator` over holdings from a `HoldingsSource`
+  and converts the result into the home screen's summary type. It
+  contains no money logic of its own.
+- The only `HoldingsSource` so far is `UnconnectedHoldingsSource`,
+  which fails closed. The home screen therefore still honestly
+  reports that wealth data is not connected yet. The next step is
+  a vault-backed `HoldingsSource`.
+
 ## What is NOT here yet
 
-- The app module does not depend on `:core:domain` yet. Wiring the
-  home screen's `WealthSummaryRepository` to this calculator, plus
-  the vault, the CAS parser, and prices, is the next step after the
-  module's own tests go green.
+- A vault-backed holdings source, the CAS parser, and prices.
 - No secrets, no keystore, no statement data, and no user data were
   copied. The module contains only logic and tests.

@@ -18,17 +18,9 @@ data class FamilyWealthSummary(
 
 /**
  * The only contract the home screen depends on. The real implementation
- * comes from the ported domain core. Until then, the app wires
- * [UnconnectedWealthSummaryRepository], which fails closed with an
- * honest message instead of showing invented numbers.
+ * is [DomainWealthSummaryRepository], which runs the domain calculator
+ * over holdings supplied by a [HoldingsSource].
  */
 interface WealthSummaryRepository {
     suspend fun load(): Result<FamilyWealthSummary>
-}
-
-class UnconnectedWealthSummaryRepository : WealthSummaryRepository {
-    override suspend fun load(): Result<FamilyWealthSummary> =
-        Result.failure(
-            IllegalStateException("Wealth data is not connected yet."),
-        )
 }

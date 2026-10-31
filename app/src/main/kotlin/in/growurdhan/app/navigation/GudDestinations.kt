@@ -21,7 +21,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import `in`.growurdhan.app.domain.UnconnectedWealthSummaryRepository
+import `in`.growurdhan.app.domain.DomainWealthSummaryRepository
+import `in`.growurdhan.app.domain.UnconnectedHoldingsSource
 import `in`.growurdhan.app.ui.home.HomeScreen
 import `in`.growurdhan.app.ui.home.HomeViewModel
 import `in`.growurdhan.app.ui.onboarding.OnboardingScreen
@@ -103,7 +104,9 @@ fun GudNavHost(
             composable("home") {
                 val homeViewModel: HomeViewModel = viewModel(
                     factory = HomeViewModel.factory(
-                        UnconnectedWealthSummaryRepository(),
+                        DomainWealthSummaryRepository(
+                            UnconnectedHoldingsSource(),
+                        ),
                     ),
                 )
                 HomeScreen(homeViewModel)
