@@ -3,12 +3,12 @@
 Branch: `shell/navigation-design-system`
 Status: **written, not yet build-verified.** There is no Java or Android
 SDK on the builder machine used for this commit, so no local build was
-run. The CI workflow file (`.github/workflows/android-build.yml`) could
-NOT be added to this branch: GitHub returned 403 for that path, which
-means the GitHub App installation does not have the workflows
-permission. CI will not run until that permission is granted and the
-workflow file is added. Do not claim this shell builds until CI reports
-success on this exact branch.
+run. The CI workflow file (`.github/workflows/android-build.yml`) was
+blocked at first (GitHub 403: the GitHub App installation lacked the
+workflows permission), but the permission was granted on 2026-10-31
+and the workflow file was added to this branch. CI should now run on
+GitHub for pushes to this branch. Do not claim this shell builds until
+a CI run reports success on this exact branch.
 
 ## What landed
 
@@ -55,9 +55,9 @@ onboarding says so plainly instead of hiding it.
 
 ## Next steps, in order
 
-1. Grant the GitHub App the workflows permission for this repository,
-   then add `.github/workflows/android-build.yml` (content already
-   prepared) so CI can run. Fix any build failure it reports.
+1. Wait for the CI run on this branch and fix any build failure it
+   reports. (Workflows permission granted 2026-10-31; workflow file
+   already added.)
 2. Port the cleaned domain core behind `WealthSummaryRepository`
    and the other domain interfaces.
 3. Replace the placeholder screens one by one with real screens.
