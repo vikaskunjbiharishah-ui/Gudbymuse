@@ -2,10 +2,15 @@
 
 Module: `:core:domain` (pure Kotlin/JVM, no Android dependency).
 Branch: `shell/navigation-design-system`
-Status: **ported, not yet compiled or tested here.** There is no Java
-on the builder machine, so no local build or test run was possible.
-Verification waits on the same CI workflows permission described in
-`docs/SHELL.md`. A test that has not run is not a pass.
+Status: **compiled and tested locally on 2026-10-31: 40 tests pass.**
+Toolchain: Temurin 17.0.21 + Kotlin compiler 2.0.21 + JUnit 4.13.2,
+run directly against the module sources (Gradle was not used, because
+no Gradle distribution is installed here). One compiler warning
+remains: the ported `ScaledAmount` internal constructor and its
+generated `copy()` method, which becomes an error in Kotlin 2.1 and
+must be fixed before any Kotlin upgrade. The Android app build and
+CI verification still wait on the workflows permission described in
+`docs/SHELL.md`.
 
 ## What was ported, as-is
 
@@ -25,6 +30,9 @@ renamed to `in.growurdhan.domain`:
   never invents a market value, a tax rate, or an exemption.
 - `InrFormat` — Indian digit grouping for display only. Display
   rounding never changes the stored amount.
+- `NativeExposureAllocation` — category exposure allocation, added
+  because the ported portfolio tests depend on it. Same port rules:
+  logic as-is, package renamed only.
 
 Algorithms were not edited during the port. If a ported algorithm
 ever needs a fix, the fix comes with a new test and a note here,
