@@ -1,0 +1,21 @@
+# Never commit secrets or keys
+*.keystore
+*.jks
+*.key
+local.properties
+*.pem
+
+# Android build outputs
+build/
+.gradle/
+*.apk
+*.aab
+*.dex
+
+# IDE and OS
+.idea/
+*.iml
+.DS_Store
+
+# Local test and coverage outputs
+local-test-results/
