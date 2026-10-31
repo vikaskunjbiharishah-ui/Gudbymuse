@@ -1,0 +1,244 @@
+/*
+ * Ported test from the earlier Kotlin work, package renamed to
+ * `in`.growurdhan.domain to match the ported domain module.
+ */
+package `in`.growurdhan.domain
+
+import org.junit.Assert.*
+import org.junit.Test
+
+class NativePortfolioMathTest {
+    private fun event(id: String, kind: String, day: String, qty: Long,
+        price: Long = 10_000L, knownCost: Boolean = true, charges: Long = 0L,
+        supersedes: String? = null) = NativePortfolioMath.Event(
+        id, "family-1", "holding-1", kind, day, qty, price, 0L, charges, supersedes, knownCost)
+
+    @Test fun sourceGoldenHybridApportionPreservesEveryMinorWithoutDuplicatingRows() {
+        val split = listOf(
+            NativeExposureAllocation.Slice("EQUITY", 6_500),
+            NativeExposureAllocation.Slice("DEBT", 3_500))
+        assertEquals(mapOf("EQUITY" to java.math.BigInteger.valueOf(66L),
+            "DEBT" to java.math.BigInteger.valueOf(35L)),
+            NativeExposureAllocation.apportion(java.math.BigInteger.valueOf(101L), split))
+        assertEquals(mapOf("EQUITY" to java.math.BigInteger.ONE,
+            "DEBT" to java.math.BigInteger.ZERO),
+            NativeExposureAllocation.apportion(java.math.BigInteger.ONE, listOf(
+                NativeExposureAllocation.Slice("EQUITY", 5_000),
+                NativeExposureAllocation.Slice("DEBT", 5_000))))
+        val large = java.math.BigInteger.valueOf(Long.MAX_VALUE).multiply(
+            java.math.BigInteger.valueOf(1_000_000L))
+        val parts = NativeExposureAllocation.apportion(large, split)
+        assertEquals(large, parts.values.fold(java.math.BigInteger.ZERO) { a, b -> a + b })
+    }
+
+    @Test fun allocationScopeKeepsForeignRowsOutAndUnknownPriceUnallocated() {
+        val split = listOf(NativeExposureAllocation.Slice("EQUITY", 6_500),
+            NativeExposureAllocation.Slice("DEBT", 3_500))
+        val rows = listOf(
+            NativeExposureAllocation.Position("hybrid", "owner-a",
+                java.math.BigInteger.valueOf(101L), split, true, "Explicit estimated hybrid"),
+            NativeExposureAllocation.Position("unpriced", "owner-a", null,
+                emptyList(), false, "No verified quote"),
+            NativeExposureAllocation.Position("foreign", "owner-b",
+                java.math.BigInteger.valueOf(999_999L),
+                listOf(NativeExposureAllocation.Slice("GOLD", 10_000)), false,
+                "Reviewed asset"))
+        val own = NativeExposureAllocation.summarize(rows, "owner-a")
+        assertEquals(listOf("hybrid", "unpriced"), own.listedHoldingIds)
+        assertEquals(java.math.BigInteger.valueOf(101L), own.knownValueMinor)
+        assertEquals(java.math.BigInteger.valueOf(101L), own.estimatedValueMinor)
+        assertEquals(1, own.excludedUnpriced)
+        assertEquals(mapOf("EQUITY" to java.math.BigInteger.valueOf(66L),
+            "DEBT" to java.math.BigInteger.valueOf(35L)), own.totals)
+        assertFalse(own.totals.containsKey("GOLD"))
+        assertEquals(java.math.BigInteger.valueOf(999_999L),
+            NativeExposureAllocation.summarize(rows, "owner-b").knownValueMinor)
+    }
+
+    @Test fun allocationRejectsUnreviewedSplitsAndDuplicateHoldingIdentity() {
+        val amount = java.math.BigInteger.valueOf(100L)
+        fun rejected(slices: List<NativeExposureAllocation.Slice>) {
+            assertThrows(IllegalArgumentException::class.java) {
+                NativeExposureAllocation.apportion(amount, slices)
+            }
+        }
+        rejected(emptyList())
+        rejected(listOf(NativeExposureAllocation.Slice("EQUITY", 9_999)))
+        rejected(listOf(NativeExposureAllocation.Slice("EQUITY", 10_001)))
+        rejected(listOf(NativeExposureAllocation.Slice("UNKNOWN", 10_000)))
+        rejected(listOf(NativeExposureAllocation.Slice("EQUITY", 5_000),
+            NativeExposureAllocation.Slice("EQUITY", 5_000)))
+        assertThrows(IllegalArgumentException::class.java) {
+            NativeExposureAllocation.apportion(amount.negate(),
+                listOf(NativeExposureAllocation.Slice("EQUITY", 10_000)))
+        }
+        val row = NativeExposureAllocation.Position("id", "owner", amount,
+            listOf(NativeExposureAllocation.Slice("EQUITY", 10_000)),
+            false, "Reviewed statement")
+        assertThrows(IllegalArgumentException::class.java) {
+            NativeExposureAllocation.summarize(listOf(row, row), "owner")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            NativeExposureAllocation.summarize(listOf(row.copy(source = "")), "owner")
+        }
+    }
+
+    @Test fun frozenEightCategoriesAndAllSubcategoriesRemainPresent() {
+        assertEquals(8, NativeAssetTaxonomy.subcategories.size)
+        assertTrue("Sovereign Gold Bond" in NativeAssetTaxonomy.subcategories.getValue("GOLD_SGB"))
+        assertTrue("POMIS" in NativeAssetTaxonomy.subcategories.getValue("FIXED_INCOME"))
+        assertTrue("AIF" in NativeAssetTaxonomy.subcategories.getValue("SPECIALISED"))
+    }
+
+    @Test fun fifoUsesScaledIntegerCostAndAllocatedSaleCharges() {
+        val events = listOf(event("buy", "BUY", "2024-01-01", 200_000_000, 20_000, charges = 100),
+            event("sell", "SELL", "2025-08-01", 100_000_000, 30_000, charges = 50))
+        val result = NativePortfolioMath.fold(events, "EQUITY")
+        assertEquals(100_000_000L, result.quantityScaled)
+        assertEquals(20_050L, result.knownCostMinor)
+        assertEquals(1, result.disposals.size)
+        assertEquals(20_050L, result.disposals.single().costMinor)
+        assertEquals(9_900L, result.disposals.single().gainMinor)
+        assertTrue(result.disposals.single().longTerm)
+    }
+
+    @Test fun unknownCostCannotBeInventedFromZero() {
+        val result = NativePortfolioMath.fold(
+            listOf(event("b", "OPENING_BALANCE", "2024-03-31", 100_000_000, knownCost = false),
+                event("s", "SELL", "2025-04-01", 20_000_000)),
+            "MUTUAL_FUND")
+        assertNull(result.disposals.single().costMinor)
+        assertNull(result.disposals.single().gainMinor)
+        assertTrue(result.hasUnknownCost)
+    }
+
+    @Test fun snapshotReductionsCannotBecomeTaxableDisposals() {
+        val result = NativePortfolioMath.fold(
+            listOf(event("o", "BUY", "2024-01-01", 100_000_000),
+                event("snap", "SNAPSHOT_ADJUSTMENT", "2024-08-01", -40_000_000)),
+            "EQUITY")
+        assertTrue(result.errors.isEmpty())
+        assertTrue(result.disposals.isEmpty())
+        assertEquals(60_000_000L, result.quantityScaled)
+    }
+
+    @Test fun splitKeepsTotalBasisWithoutFloatingPoint() {
+        val result = NativePortfolioMath.fold(listOf(
+            event("o", "BUY", "2024-01-01", 100_000_000, 24_000),
+            event("sp", "SPLIT", "2024-04-01", 2, 1)), "EQUITY")
+        assertEquals(200_000_000L, result.quantityScaled)
+        assertEquals(24_000L, result.knownCostMinor)
+    }
+
+    @Test fun correctionsSupersedeAndCannotCrossOwnershipOrCycle() {
+        val events = listOf(event("b", "BUY", "2024-01-01", 100_000_000),
+            event("correct", "CORRECTION", "2024-01-02", 200_000_000, supersedes = "b"))
+        assertEquals(200_000_000L, NativePortfolioMath.fold(events, "EQUITY").quantityScaled)
+        try {
+            NativePortfolioMath.fold(events + event("cycle", "CORRECTION", "2024-01-01",
+                1L, supersedes = "cycle"), "EQUITY")
+            fail("Self-correction must not be accepted")
+        } catch (_: IllegalArgumentException) { }
+    }
+
+    @Test fun ownerIsolationRejectsMixedEvents() {
+        val foreign = event("foreign", "BUY", "2024-01-01", 1).copy(ownerId = "someone-else")
+        try {
+            NativePortfolioMath.fold(listOf(event("self", "BUY", "2024-01-01", 1), foreign), "EQUITY")
+            fail("Cross-owner fold must not be allowed")
+        } catch (_: IllegalArgumentException) { }
+    }
+    @Test fun multipleFifoLotsAllocateEveryScaledMinorOfSaleCharges() {
+        val cases = listOf(
+            event("lot-1", "BUY", "2024-01-01", 100_000_000L, 10_000L),
+            event("lot-2", "BUY", "2024-02-01", 100_000_000L, 10_000L),
+            event("dispose", "SELL", "2025-03-01", 200_000_000L, 20_000L,
+                charges = 1L)
+        )
+        val result = NativePortfolioMath.fold(cases, "EQUITY")
+        assertEquals(0L, result.quantityScaled)
+        assertEquals(2, result.disposals.size)
+        assertEquals(39_999L, result.disposals.sumOf { it.proceedsMinor })
+        assertEquals(19_999L, result.disposals.sumOf { it.gainMinor ?: 0L })
+    }
+
+    @Test fun orphanSplitIsAnErrorEvenWhenFinalQuantityWouldBeZero() {
+        val onlySplit = NativePortfolioMath.fold(
+            listOf(event("orphan-split", "SPLIT", "2024-01-01", 2L, 1L)), "EQUITY")
+        assertEquals(0L, onlySplit.quantityScaled)
+        assertTrue(onlySplit.errors.any { it.contains("Split without an open position") })
+
+        val afterSale = NativePortfolioMath.fold(listOf(
+            event("buy", "BUY", "2024-01-01", 100_000_000L),
+            event("sell", "SELL", "2024-03-01", 100_000_000L),
+            event("orphan-split", "SPLIT", "2024-04-01", 2L, 1L)), "EQUITY")
+        assertTrue(afterSale.errors.any { it.contains("Split without an open position") })
+    }
+
+    @Test fun splitOfLivePositionRemainsValid() {
+        val result = NativePortfolioMath.fold(listOf(
+            event("buy", "BUY", "2024-01-01", 100_000_000L),
+            event("split", "SPLIT", "2024-02-01", 3L, 2L)), "EQUITY")
+        assertTrue(result.errors.isEmpty())
+        assertEquals(150_000_000L, result.quantityScaled)
+    }
+
+    @Test fun competingCorrectionsCannotDoubleCountReplacementLots() {
+        val original = event("buy", "BUY", "2024-01-01", 100_000_000L)
+        val first = event("first-correction", "CORRECTION", "2024-01-02",
+            200_000_000L, supersedes = "buy")
+        val second = event("second-correction", "CORRECTION", "2024-01-03",
+            300_000_000L, supersedes = "buy")
+        assertThrows(IllegalArgumentException::class.java) {
+            NativePortfolioMath.fold(listOf(original, first, second), "EQUITY")
+        }
+    }
+
+    @Test fun fractionalSplitBeyondEightQuantityDecimalsMustFailWithoutTruncation() {
+        val first = event("tiny-buy", "BUY", "2024-01-01",
+            1L, 10_000L)
+        // Three-for-two would create 1.5 native quantity units:
+        // each native integer quantum represents 0.00000001 securities.
+        val split = event("fractional-split", "SPLIT",
+            "2024-02-01", 3L, 2L)
+        assertThrows(IllegalArgumentException::class.java) {
+            NativePortfolioMath.fold(listOf(first, split), "EQUITY")
+        }
+    }
+
+    @Test fun exactSplitChangesUnitsButDoesNotFabricateMoneyOrBasis() {
+        val events = listOf(
+            event("buy-a", "BUY", "2024-01-01", 200_000_000L, 17_500L),
+            event("three-for-two", "SPLIT", "2024-04-01", 3L, 2L))
+        val folded = NativePortfolioMath.fold(events, "EQUITY")
+        assertTrue(folded.errors.isEmpty())
+        assertEquals(300_000_000L, folded.quantityScaled)
+        assertEquals(35_000L, folded.knownCostMinor)
+        assertEquals(1, folded.openLots.size)
+        assertEquals(300_000_000L, folded.openLots.single().originalQuantityScaled)
+    }
+
+    @Test fun closedCorrectionCycleCannotDisappearAsAnEmptyValidPortfolio() {
+        val a = event("correction-a", "CORRECTION", "2024-01-01",
+            100_000_000L, supersedes = "correction-b")
+        val b = event("correction-b", "CORRECTION", "2024-01-02",
+            200_000_000L, supersedes = "correction-a")
+        assertThrows(IllegalArgumentException::class.java) {
+            NativePortfolioMath.fold(listOf(a, b), "EQUITY")
+        }
+    }
+
+    @Test fun validMultistepCorrectionChainFoldsOnlyLatestEconomicRecord() {
+        val events = listOf(
+            event("buy", "BUY", "2024-01-01", 100_000_000L),
+            event("correction-a", "CORRECTION", "2024-02-01",
+                200_000_000L, supersedes = "buy"),
+            event("correction-b", "CORRECTION", "2024-03-01",
+                300_000_000L, supersedes = "correction-a"))
+        val folded = NativePortfolioMath.fold(events, "EQUITY")
+        assertTrue(folded.errors.isEmpty())
+        assertEquals(300_000_000L, folded.quantityScaled)
+        assertEquals(1, folded.openLots.size)
+    }
+
+}

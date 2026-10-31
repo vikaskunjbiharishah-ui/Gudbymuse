@@ -14,3 +14,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "GrowUrDhan"
 include(":app")
+include(":core:domain")
