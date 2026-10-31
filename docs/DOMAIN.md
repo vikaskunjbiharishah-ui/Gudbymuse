@@ -37,11 +37,24 @@ not a silent edit.
 - `DomainSmokeTest` (fresh): money addition, lakh grouping
   (₹12,345.68), and April-to-March assessment years.
 
+## New code in this module: family wealth summary
+
+- `FamilyWealthCalculator` (fresh, not ported): takes a list of
+  `HoldingValue` records and returns total wealth, member count,
+  holding count, and per-category totals, all formatted with
+  `InrFormat`. Liabilities are stored negative, so loans reduce
+  total wealth. Unknown categories are rejected, and overflow
+  fails loudly via exact addition. It fetches no prices and reads
+  no database; the data layer supplies the holding values later.
+- `FamilyWealthCalculatorTest` (fresh): totals across members and
+  categories, loans reducing wealth, an empty family, and rejection
+  of an unknown category. Values are hand-computed in the test.
+
 ## What is NOT here yet
 
 - The app module does not depend on `:core:domain` yet. Wiring the
-  home screen's `WealthSummaryRepository` to this module, plus the
-  vault, the CAS parser, and prices, is the next step after the
-  module's own tests go green in CI.
+  home screen's `WealthSummaryRepository` to this calculator, plus
+  the vault, the CAS parser, and prices, is the next step after the
+  module's own tests go green.
 - No secrets, no keystore, no statement data, and no user data were
   copied. The module contains only logic and tests.
